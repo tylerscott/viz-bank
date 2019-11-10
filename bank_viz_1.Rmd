@@ -1,0 +1,172 @@
+---
+title: "Bank Viz"
+author: "Joe Long"
+date: "11/9/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(DataExplorer)
+library(Hmisc)
+raw <- bank.full
+str(raw)
+introduce(raw)
+sum1mary(raw)
+```
+
+## Data Exploratory
+
+```{r}
+
+plot_missing(raw)
+plot_density(raw)
+plot_intro(raw)
+plot_density(raw$age)
+plot_correlation(raw[,c(1,6,10)])
+library(dplyr)
+library(tibble)
+glimpse(raw)
+```
+
+
+```{r}
+table(raw$loan)
+
+library(ggplot2)
+
+Totalrows = nrow(raw)
+
+raw %>%
+  group_by(loan) %>%
+  summarise(Count = n()/Totalrows*100) %>%
+  arrange(desc(Count)) %>%
+  ungroup() %>%
+  mutate(loan = reorder(loan,Count)) %>%
+  
+  ggplot(aes(x = loan,y = Count)) +
+  geom_bar(stat='identity',fill= "blue") +
+  geom_text(aes(x = loan, y = 1, label = paste0("( ",round(Count,2)," %)",sep="")),
+            hjust=0, vjust=.5, size = 4, colour = 'white',
+            fontface = 'bold') +
+  labs(x = 'loan', 
+       y = 'Percentage', 
+       title = 'Loan and Count',
+       subtitle = '0 - No loan ; 1 - With loan') +
+  coord_flip() +
+  theme_bw()
+
+```
+
+```{r}
+table(raw$loan)
+  boxplot(data=raw,age~job,col="blue")
+
+```
+
+
+```{r}
+
+library(ggplot2)
+
+Totalrows = nrow(raw)
+
+raw %>%
+  group_by(housing) %>%
+  summarise(Count = n()/Totalrows*100) %>%
+  arrange(desc(Count)) %>%
+  ungroup() %>%
+  mutate(housing = reorder(housing,Count)) %>%
+  
+  ggplot(aes(x = housing,y = Count)) +
+  geom_bar(stat='identity',fill= "blue") +
+  geom_text(aes(x = housing, y = 1, label = paste0("( ",round(Count,2)," %)",sep="")),
+            hjust=0, vjust=.5, size = 4, colour = 'white',
+            fontface = 'bold') +
+  labs(x = 'housing', 
+       y = 'Percentage', 
+       title = 'Housing Mortgage and Count',
+       subtitle = '0 - No Mortage ; 1 - With Mortgage') +
+  coord_flip() +
+  theme_bw()
+
+```
+
+```{r}
+library(caret)
+raw$loan <- ifelse(raw$loan == "yes", "1","0")
+
+# Create the training and test datasets set.seed(100) 
+ 
+# Step 1: Get row numbers for the training data
+ trainRowNumbers <- createDataPartition(raw$loan, p=0.8, list=FALSE) 
+ 
+# Step 2: Create the training  dataset
+ trainData <- raw[trainRowNumbers,] 
+ 
+# Step 3: Create the test dataset
+ testData <- raw[-trainRowNumbers,] 
+ 
+ 
+ preProcValues <- preProcess(trainData, method = c("center", "scale"))
+
+trainTransformed <- predict(preProcValues, trainData)
+testTransformed <- predict(preProcValues, testData)
+
+```
+
+```{r}
+
+
+plot_correlation(raw,type="continuous")
+plot_correlation(raw,type = "discrete")
+```
+
+
+```{r}
+library(gbm)
+library(caret)
+
+
+fitControl <- trainControl(## 5-fold CV
+                           method = "repeatedcv",
+                           number = 5,
+                           ## repeated 3 times
+                           repeats = 3)
+
+
+set.seed(825)
+
+testData$loan <- as.numeric(testData$loan)
+
+linearMod <- lm(loan ~., data=testData)  # build linear regression model on full data
+linearMod
+
+datapredict <- predict(linearMod,newdata = testData,interval = "prediction")
+datapredict <- as.data.frame(datapredict)
+datapredict$fit1 <- ifelse(datapredict$fit > 0.5, "1","0")
+datapredict <- as.data.frame(datapredict)
+testData$predict <- datapredict$fit1
+checkdata <- testData[,c(8,19)]
+gbmFit1 <- train(loan ~ age, data = testData,
+                   method = "lm", 
+                 trControl = fitControl,
+                 verbose = FALSE)
+gbmFit1
+
+raw$loan <- as.factor(raw$loan)
+randomtest <- randomForest(loan ~., data=raw, mtry=3,
+                         importance=TRUE, na.action=na.omit)
+str(raw)
+
+raw$loan1 <- ifelse(raw$loan == "yes", "1","0")
+plot_missing(raw$loan)
+```
+
+
+```{r}
+
+ggplot(data=raw, aes(x=age, y=loan,fill=as.factor(loan)))+
+  geom_col()
+
+```
